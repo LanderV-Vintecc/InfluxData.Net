@@ -53,43 +53,45 @@ namespace InfluxData.Net.Common.RequestClients
             bool includeAuthToQuery = true,
             bool headerIsBody = false)
         {
-            var response = await RequestInnerAsync(
-                HttpCompletionOption.ResponseHeadersRead,
-                CancellationToken.None,
-                method,
-                path,
-                requestParams,
-                content,
-                includeAuthToQuery).ConfigureAwait(false);
-
-            string responseContent = String.Empty;
-
-            if (!headerIsBody)
+            using (var response = await RequestInnerAsync(
+                       HttpCompletionOption.ResponseHeadersRead,
+                       CancellationToken.None,
+                       method,
+                       path,
+                       requestParams,
+                       content,
+                       includeAuthToQuery).ConfigureAwait(false))
             {
-                responseContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            }
-            else
-            {
-                IEnumerable<string> values;
 
-                if (response.Headers.TryGetValues("X-Influxdb-Version", out values))
-                {
-                    responseContent = values.First();
-                }
-                else if (response.Headers.TryGetValues("X-Kapacitor-Version", out values))
-                {
-                    responseContent = values.First();
-                }
-            }
+                string responseContent = String.Empty;
 
-            HandleIfErrorResponse(response.StatusCode, responseContent);
+                if (!headerIsBody)
+                {
+                    responseContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                }
+                else
+                {
+                    IEnumerable<string> values;
+
+                    if (response.Headers.TryGetValues("X-Influxdb-Version", out values))
+                    {
+                        responseContent = values.First();
+                    }
+                    else if (response.Headers.TryGetValues("X-Kapacitor-Version", out values))
+                    {
+                        responseContent = values.First();
+                    }
+                }
+
+                HandleIfErrorResponse(response.StatusCode, responseContent);
 
 #if DEBUG
-            Debug.WriteLine("[Response] {0}", response.ToJson());
-            Debug.WriteLine("[ResponseData] {0}", responseContent);
+                Debug.WriteLine("[Response] {0}", response.ToJson());
+                Debug.WriteLine("[ResponseData] {0}", responseContent);
 #endif
 
-            return new InfluxDataApiResponse(response.StatusCode, responseContent);
+                return new InfluxDataApiResponse(response.StatusCode, responseContent);
+            }
         }
 
         private async Task<HttpResponseMessage> RequestInnerAsync(
@@ -102,17 +104,19 @@ namespace InfluxData.Net.Common.RequestClients
             bool includeAuthToQuery = true)
         {
             var uri = BuildUri(path, extraParams, includeAuthToQuery);
-            var request = BuildRequest(method, content, uri);
+            using (var request = BuildRequest(method, content, uri))
+            {
 
 #if DEBUG
-            Debug.WriteLine("[Request] {0}", request.ToJson());
-            if (content != null)
-            {
-                Debug.WriteLine("[RequestData] {0}", content.ReadAsStringAsync().Result);
-            }
+                Debug.WriteLine("[Request] {0}", request.ToJson());
+                if (content != null)
+                {
+                    Debug.WriteLine("[RequestData] {0}", content.ReadAsStringAsync().Result);
+                }
 #endif
 
-            return await this.Configuration.HttpClient.SendAsync(request, completionOption, cancellationToken).ConfigureAwait(false);
+                return await this.Configuration.HttpClient.SendAsync(request, completionOption, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         #endregion Request Base
